@@ -1,0 +1,6 @@
+import {emptyData,validateBackup} from './core.js';
+let db;
+export function openDB() { return new Promise((resolve,reject)=>{const req=indexedDB.open('mygolf-v1',1); req.onupgradeneeded=()=>req.result.createObjectStore('app'); req.onerror=()=>reject(req.error); req.onsuccess=()=>{db=req.result;db.onversionchange=()=>db.close();resolve();};}); }
+export function readData() {return new Promise((resolve,reject)=>{const tx=db.transaction('app'); const req=tx.objectStore('app').get('data'); req.onsuccess=()=>{try{resolve(req.result?validateBackup(req.result):emptyData());}catch(e){reject(e);}};req.onerror=()=>reject(req.error);});}
+// Optimistic revision check prevents two tabs from silently overwriting each other.
+export function saveData(next,expectedRevision) {return new Promise((resolve,reject)=>{const tx=db.transaction('app','readwrite');const store=tx.objectStore('app'); const req=store.get('data');let result,error;req.onsuccess=()=>{const current=req.result||emptyData();if(current.revision!==expectedRevision){error=new Error('다른 화면에서 기록이 변경됐습니다. 이 화면을 새로고침한 뒤 다시 입력해 주세요.');tx.abort();return;}result={...next,revision:current.revision+1};store.put(result,'data');};tx.oncomplete=()=>resolve(result);tx.onerror=()=>reject(error||tx.error);tx.onabort=()=>reject(error||tx.error||new Error('저장하지 못했습니다.'));});}
